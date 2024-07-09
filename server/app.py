@@ -44,12 +44,13 @@ api.add_resource(Restaurants, "/restaurants")
 
 class RestaurantsId(Resource):
     def get(self, id):
-        restaurant = Restaurant.query.filter(Restaurant.id == id).first()
+        restaurant = Restaurant.query.filter_by(id = id).first()
 
-        if not restaurant:
-            return make_response(jsonify({"message": "Restaurant not found"}), 404)
-
-        response = make_response(jsonify(restaurant.to_dict()), 200)
+        if restaurant:
+            response = make_response(jsonify(restaurant.to_dict()), 200)
+        else:
+            response = make_response(jsonify({"error": "Restaurant not found"}), 404)
+            
 
         return response
     
@@ -57,13 +58,12 @@ class RestaurantsId(Resource):
         restaurant = Restaurant.query.filter(Restaurant.id == id).first()
 
         if restaurant:
-        
-          db.session.delete(restaurant)
-          db.session.commit()
-          response = make_response({}, 204)
+            db.session.delete(restaurant)
+            db.session.commit()
+            response = make_response({}, 204)
 
         else:
-          return make_response(jsonify({"error": "Restaurant not found"}), 404)
+            response = make_response(jsonify({"error": "Restaurant not found"}), 404)
 
         return response
         
@@ -88,32 +88,37 @@ class Pizzas(Resource):
 api.add_resource(Pizzas, "/pizzas")
     
 class RestaurantPizzas(Resource):
-
-    def post(self):
-
-        restaurant_pizza = request.get_json()
-
-        pizza_price = restaurant_pizza.get("price")
-        pizza_id = restaurant_pizza.get("pizza_id")
-        restaurant_id = restaurant_pizza.get("restaurant_id")
-
-        if not pizza_price or not pizza_id or not restaurant_id:
-            return make_response(jsonify({"message": "Missing required fields"}), 400)
-        
-        if pizza_price < 1 or pizza_price > 30:
-            return make_response(jsonify({"message": "Price must be between 1 and 30"}), 400)
-
-        restaurant_pizza = RestaurantPizza(price=pizza_price, pizza_id=pizza_id, restaurant_id=restaurant_id)
-
-        db.session.add(restaurant_pizza)
-        db.session.commit()
-
-        response = make_response(jsonify(restaurant_pizza.to_dict()), 201)
-
-        return response
     
+    def post(self):
+       
+        restaurant_pizza_data = request.get_json()
+        try:
+            price = restaurant_pizza_data.get('price')
+            pizza_id = restaurant_pizza_data.get('pizza_id')
+            restaurant_id = restaurant_pizza_data.get('restaurant_id')
+            # added validation
+            if price < 1 or price > 30:
+                return make_response(jsonify({"errors": ["validation errors"]}), 400)
+        
 
-api.add_resource(RestaurantPizzas, "/restaurant_pizzas")
+            restaurant_pizza = RestaurantPizza(price=price, pizza_id=pizza_id, restaurant_id=restaurant_id)
+        
+            db.session.add(restaurant_pizza)
+            db.session.commit()
+
+            response_dict = restaurant_pizza.to_dict()
+            return make_response(
+            jsonify(response_dict),
+            201
+            )
+
+        except KeyError as e:
+            db.session.rollback()
+            return make_response(jsonify({"errors": [f"Missing key: {str(e)}"]}), 404)
+        finally:
+            db.session.close()
+
+api.add_resource(RestaurantPizzas, '/restaurant_pizzas')
 
 if __name__ == "__main__":
     app.run(port=5555, debug=True)
